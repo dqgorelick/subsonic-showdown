@@ -1,0 +1,230 @@
+<html>
+<head>
+  <title>TBD</title>
+  <style>
+    html, body {
+      margin: 0;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <canvas id="canvas"></canvas>
+  </div>
+</body>
+<script>
+  // helper functions
+  function randRange(min, max) {
+    return Math.floor(Math.random()*(max-min)) + min;
+  }
+
+  function map(n, start1, stop1, start2, stop2) {
+    return ((n-start1)/(stop1-start1))*(stop2-start2)+start2;
+  };
+
+  var UP = 'UP',
+      DOWN = 'DOWN',
+      LEFT = 'LEFT',
+      RIGHT = 'RIGHT';
+
+  var KEYS = {
+    LEFT: 37,
+    UP: 38,
+    RIGHT: 39,
+    DOWN: 40,
+    LEFT_L: 65,
+    UP_L: 87,
+    RIGHT_L: 68,
+    DOWN_L: 83
+  };
+
+  var BEATS = 16;
+  var PITCHES = 8;
+  var PLAYER_COUNT = 2;
+  var STARTING_TEMPO = 240;
+
+  var NoteTile = function(x, y) {
+    this.x = x;
+    this.y = y;
+    this.contents = {
+      players: [],
+      mines: []
+    }
+  }
+
+  var Player = function(id, x, y) {
+    this.id = id;
+    this.x = x;
+    this.y = y;
+    this.render = function(ctx) {
+      ctx.fillStyle = (id == 0 ? "#FF0000" : "#00FF00");
+      ctx.fillRect(20,20,20,20);
+    }
+    this.move = function(direction) {
+      var maxY = gm.board.pitches;
+      var maxX = gm.board.beats;
+      var index =  gm.board.grid[this.x][this.y].contents.players.indexOf(this);
+      gm.board.grid[this.x][this.y].contents.players.splice(index, 1);
+      switch (direction) {
+        case UP:
+          this.y = (this.y > 0 ? this.y - 1 : maxY-1);
+          break;
+        case DOWN:
+          this.y = (this.y < maxY-1 ? this.y + 1 : 0);
+          break;
+        case LEFT:
+          this.x = (this.x > 0 ? this.x - 1 : maxX-1);
+          break;
+        case RIGHT:
+          this.x = (this.x < maxX-1 ? this.x + 1 : 0);
+          break;
+      }
+      gm.board.grid[this.x][this.y].contents.players.push(this);
+    }
+  }
+
+  var GameBoard = function(beats, pitches) {
+    this.grid = [];
+    this.beats = beats;
+    this.pitches = pitches;
+    // this.mines = [];
+    // this.players = [];
+    this.initialize = function() {
+      for (var i=0; i<this.beats; i++) {
+        this.grid[i] = [];
+        for (var j=0; j<this.pitches; j++) {
+          this.grid[i][j] = new NoteTile(i, j);
+        }
+      }
+      document.getElementById("canvas").width = window.innerWidth;
+      document.getElementById("canvas").height = window.innerHeight;
+    }
+    this.render = function() {
+      console.log('rendering...');
+      var ctx = document.getElementById("canvas").getContext("2d");
+      var tileSizePx = (window.innerWidth * .8) / this.beats;
+      var spacing = 10;
+      for (var i=0; i<this.grid.length; i++) {
+        for (var j=0; j<this.grid[i].length; j++) {
+          ctx.fillStyle="#555";
+          var x = i*(tileSizePx + spacing);
+          var y = j*(tileSizePx + spacing);
+          ctx.save();
+          ctx.translate(x,y);
+          ctx.fillRect(0, 0, tileSizePx, tileSizePx);
+          if(this.grid[i][j].contents.players.length > 0) {
+            this.grid[i][j].contents.players.forEach(function(p){
+              p.render(ctx);
+            });
+          }
+          if(this.grid[i][j].contents.mines.length > 0) {
+            ctx.fillRect(10, 10, 10, 10);
+          }
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  var GameManager = function() {
+    this.board = new GameBoard(BEATS, PITCHES);
+    this.players = [];
+    this.soundManager = new SoundManager(this.board);
+    this.start = function() {
+      this.board.initialize();
+      for (var i=0; i<PLAYER_COUNT; i++) {
+        var x = randRange(0, BEATS);
+        var y = randRange(0, PITCHES);
+        this.players[i] = new Player(i, x, y);
+        this.board.grid[x][y].contents.players.push(this.players[i]);
+      }
+      this.board.render();
+      this.soundManager.start();
+      requestAnimationFrame(this.step.bind(this));
+
+    }
+    this.step = function(currentTime) {
+      this.board.render();
+      console.log('rendering!');
+      requestAnimationFrame(this.step.bind(this));
+    }
+
+    this.handleInput = function(key) {
+      if (key === KEYS.LEFT) {
+        console.log('LEFT',KEYS.LEFT);
+        this.players[0].move(LEFT);
+      } else if (key === KEYS.UP) {
+        console.log('UP',KEYS.UP);
+        this.players[0].move(UP);
+      } else if (key === KEYS.RIGHT) {
+        this.players[0].move(RIGHT);
+        console.log('RIGHT',KEYS.RIGHT);
+      } else if (key === KEYS.DOWN) {
+        this.players[0].move(DOWN);
+        console.log('DOWN',KEYS.DOWN);
+      }
+    }
+  }
+
+  var SoundManager = function(board) {
+    this.tempo = STARTING_TEMPO;
+    this.lastPlayed = performance.now();
+    this.currentBeat = 0;
+    this.sounds = {
+      hat: new Audio('assets/sounds/808-HiHats03.wav'),
+      clap: new Audio('assets/sounds/808-Clap06.wav'),
+      kick: new Audio('assets/sounds/808longkick.wav')
+    }
+
+    var that = this;
+    this.step = function(currentTime) {
+      var delta = currentTime - that.lastPlayed;
+      if(delta > (60 / that.tempo)*1000) {
+        that.playBeat();
+        that.lastPlayed = currentTime;
+      }
+      requestAnimationFrame(that.step);
+    }
+    this.playBeat = function() {
+      // this.currentBeat = this.currentBeat%board.beats;
+      var instruments = board.grid[this.currentBeat];
+      // play every beat
+      if(this.currentBeat == 0) {
+        this.sounds.kick.play();
+      }
+      if(this.currentBeat % 2 == 0) {
+        this.sounds.hat.play();
+      }
+
+      instruments.forEach(function(tile) {
+        if(tile.contents.players.length > 0) {
+          // TODO: find differnt players
+          this.sounds.clap.play();
+        }
+      }.bind(this))
+      this.currentBeat++;
+      if(this.currentBeat >= board.beats) {
+        this.currentBeat = 0;
+      }
+    }
+    this.start = function() {
+      requestAnimationFrame(this.step);
+    }
+  }
+
+  var gm = new GameManager();
+  gm.start();
+
+  document.addEventListener("keydown", function(event) {
+    // console.log(event.which);
+    gm.handleInput(event.which);
+  });
+
+</script>
+</html>
