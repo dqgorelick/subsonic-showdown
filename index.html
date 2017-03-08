@@ -12,6 +12,8 @@
     }
 
   </style>
+  <script src="./javascripts/vendor/teoria.js"></script>
+  <script src="./javascripts/vendor/tone.min.js"></script>
 </head>
 <body>
   <div class="wrapper">
@@ -106,9 +108,8 @@
       document.getElementById("canvas").height = window.innerHeight;
     }
     this.render = function() {
-      console.log('rendering...');
       var ctx = document.getElementById("canvas").getContext("2d");
-      var tileSizePx = (window.innerWidth * .8) / this.beats;
+      var tileSizePx = (window.innerWidth * .6) / this.beats;
       var spacing = 10;
       for (var i=0; i<this.grid.length; i++) {
         for (var j=0; j<this.grid[i].length; j++) {
@@ -151,7 +152,6 @@
     }
     this.step = function(currentTime) {
       this.board.render();
-      console.log('rendering!');
       requestAnimationFrame(this.step.bind(this));
     }
 
@@ -173,13 +173,40 @@
   }
 
   var SoundManager = function(board) {
+    // set up notes via teoria.js
+    var c4 = teoria.note('c4');
+    var scale = c4.scale('mixolydian').simple();
+
+    this.getNote = function(pitchIndex) {
+      var octave = 3 + Math.floor(pitchIndex/scale.length);
+      var note = scale[pitchIndex % scale.length] + octave;
+      console.log('note', note);
+      return note;
+    }
+
+    // create tone.js
+    var vol = new Tone.Volume(12);
+    var freeverb = new Tone.Freeverb(0.7, 1200).toMaster();
+    var synth = new Tone.PolySynth(6, Tone.FMSynth, {
+        "oscillator": {
+            "partials": [0, 2, 3, 4, 8],
+        },
+        "envelope": {
+            "attack": 0.1,
+            "decay": 0.4
+        },
+        "volume": {
+        }
+    }).chain(vol).connect(freeverb).toMaster();
+
     this.tempo = STARTING_TEMPO;
     this.lastPlayed = performance.now();
     this.currentBeat = 0;
     this.sounds = {
       hat: new Audio('assets/sounds/808-HiHats03.wav'),
       clap: new Audio('assets/sounds/808-Clap06.wav'),
-      kick: new Audio('assets/sounds/808longkick.wav')
+      kick: new Audio('assets/sounds/808longkick.wav'),
+      bell: new Audio('assets/sounds/808-Cowbell1.wav')
     }
 
     var that = this;
@@ -202,10 +229,11 @@
         this.sounds.hat.play();
       }
 
-      instruments.forEach(function(tile) {
+      instruments.forEach(function(tile, pitch) {
         if(tile.contents.players.length > 0) {
           // TODO: find differnt players
-          this.sounds.clap.play();
+          // this.sounds.bell.play();
+          synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
         }
       }.bind(this))
       this.currentBeat++;
