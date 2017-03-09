@@ -30,26 +30,26 @@
     return ((n-start1)/(stop1-start1))*(stop2-start2)+start2;
   };
 
-  var UP = 'UP',
-      DOWN = 'DOWN',
-      LEFT = 'LEFT',
-      RIGHT = 'RIGHT';
-
-  var KEYS = {
-    LEFT: 37,
-    UP: 38,
-    RIGHT: 39,
-    DOWN: 40,
-    LEFT_L: 65,
-    UP_L: 87,
-    RIGHT_L: 68,
-    DOWN_L: 83
-  };
+  var LEFT = 37,
+    UP = 38,
+    RIGHT = 39,
+    DOWN = 40,
+    LEFT_L = 65,
+    UP_L = 87,
+    RIGHT_L = 68,
+    DOWN_L = 83,
+    SPACE = 32;
 
   var BEATS = 16;
   var PITCHES = 8;
   var PLAYER_COUNT = 2;
   var STARTING_TEMPO = 240;
+
+  var Mine = function(playerId, x, y) {
+    this.id = playerId;
+    this.x = x;
+    this.y = y;
+  }
 
   var NoteTile = function(x, y) {
     this.x = x;
@@ -64,6 +64,7 @@
     this.id = id;
     this.x = x;
     this.y = y;
+    this.mines = [];
     this.render = function(ctx) {
       ctx.fillStyle = (id == 0 ? "#FF0000" : "#00FF00");
       ctx.fillRect(20,20,20,20);
@@ -89,6 +90,12 @@
       }
       gm.board.grid[this.x][this.y].contents.players.push(this);
     }
+    this.placeMine = function() {
+      var mine = new Mine(this.id, this.x, this.y);
+      // TODO: check for other mines / blocked paths / etc
+      this.mines.push(mine);
+      gm.board.grid[this.x][this.y].contents.mines.push(mine);
+    }
   }
 
   var GameBoard = function(beats, pitches) {
@@ -113,18 +120,22 @@
       var spacing = 10;
       for (var i=0; i<this.grid.length; i++) {
         for (var j=0; j<this.grid[i].length; j++) {
+          // render tiles
           ctx.fillStyle="#555";
           var x = i*(tileSizePx + spacing);
           var y = j*(tileSizePx + spacing);
           ctx.save();
           ctx.translate(x,y);
           ctx.fillRect(0, 0, tileSizePx, tileSizePx);
+          // render players
           if(this.grid[i][j].contents.players.length > 0) {
             this.grid[i][j].contents.players.forEach(function(p){
               p.render(ctx);
             });
           }
+          // render mines
           if(this.grid[i][j].contents.mines.length > 0) {
+            ctx.fillStyle="#FF0000";
             ctx.fillRect(10, 10, 10, 10);
           }
           ctx.restore();
@@ -156,18 +167,21 @@
     }
 
     this.handleInput = function(key) {
-      if (key === KEYS.LEFT) {
-        console.log('LEFT',KEYS.LEFT);
+      if (key === LEFT) {
+        console.log('LEFT',LEFT);
         this.players[0].move(LEFT);
-      } else if (key === KEYS.UP) {
-        console.log('UP',KEYS.UP);
+      } else if (key === UP) {
+        console.log('UP',UP);
         this.players[0].move(UP);
-      } else if (key === KEYS.RIGHT) {
+      } else if (key === RIGHT) {
         this.players[0].move(RIGHT);
-        console.log('RIGHT',KEYS.RIGHT);
-      } else if (key === KEYS.DOWN) {
+        console.log('RIGHT',RIGHT);
+      } else if (key === DOWN) {
         this.players[0].move(DOWN);
-        console.log('DOWN',KEYS.DOWN);
+        console.log('DOWN',DOWN);
+      } else if (key === SPACE) {
+        console.log('SPACE',SPACE);
+        this.players[0].placeMine();
       }
     }
   }
@@ -232,7 +246,8 @@
       instruments.forEach(function(tile, pitch) {
         if(tile.contents.players.length > 0) {
           // TODO: find differnt players
-          // this.sounds.bell.play();
+          synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
+        } else if (tile.contents.mines.length > 0) {
           synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
         }
       }.bind(this))
@@ -250,7 +265,6 @@
   gm.start();
 
   document.addEventListener("keydown", function(event) {
-    // console.log(event.which);
     gm.handleInput(event.which);
   });
 
