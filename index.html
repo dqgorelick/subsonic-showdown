@@ -10,7 +10,16 @@
       width: 100%;
       height: 100%;
     }
-
+    .debug {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      padding: 20px;
+    }
+    .debug > div {
+      display: inline-block;
+      padding-left: 5px;
+    }
   </style>
   <script src="./javascripts/vendor/teoria.js"></script>
   <script src="./javascripts/vendor/tone.min.js"></script>
@@ -18,6 +27,12 @@
 <body>
   <div class="wrapper">
     <canvas id="canvas"></canvas>
+    <div class="debug">
+      <p>Go right to left. Mouse down to reveal mines. Space to play note @ current location.</p>
+      <div id="mineCount"></div>
+      <div id="sweepCount"></div>
+      <div id="levelCount"></div>
+    </div>
   </div>
 </body>
 <script>
@@ -40,16 +55,21 @@
     DOWN_L = 83,
     SPACE = 32;
 
+  // sometimes there are too many drum noises...
   var MUTED = window.location.hash === '#muted' || false;
-  var BEATS = 16;
-  var PITCHES = 8;
+  var BEATS = 8;
+  var MINE_COUNT = 2;
+  var MINE_LIMIT = 9;
+  var PITCHES = 4;
   var PLAYER_COUNT = 1;
   var STARTING_TEMPO = 240;
+  var SHOW_MINES = false;
 
   var Mine = function(playerId, x, y) {
     this.id = playerId;
     this.x = x;
     this.y = y;
+    this.hidden = true;
   }
 
   var NoteTile = function(x, y) {
@@ -65,7 +85,6 @@
     this.id = id;
     this.x = x;
     this.y = y;
-    this.mines = [];
     this.render = function(ctx) {
       ctx.fillStyle = (id == 0 ? "#FF0000" : "#00FF00");
       ctx.fillRect(20,20,20,20);
@@ -77,32 +96,34 @@
       gm.board.grid[this.x][this.y].contents.players.splice(index, 1);
       switch (direction) {
         case UP:
-          this.y = (this.y > 0 ? this.y - 1 : maxY-1);
-          // TODO: move this somewhere else eventually
-          if (this.x === 0) {
-            gm.soundManager.triggerSound(this.y);
-          }
+          this.y = (this.y > 0 ? this.y - 1 : this.y);
           break;
         case DOWN:
-          this.y = (this.y < maxY-1 ? this.y + 1 : 0);
-          // TODO: this too
-          if (this.x === 0) {
-            gm.soundManager.triggerSound(this.y);
-          }
+          this.y = (this.y < maxY-1 ? this.y + 1 : this.y);
           break;
         case LEFT:
           this.x = (this.x > 0 ? this.x - 1 : maxX-1);
           break;
         case RIGHT:
           this.x = (this.x < maxX-1 ? this.x + 1 : 0);
+          if (this.x == 0) {
+            gm.sweepCount = 0;
+            gm.levelCount++;
+            gm.placeRandomMine();
+          }
           break;
+        case SPACE:
+          gm.soundManager.triggerSound(this.y);
+          break;
+        default:
+          console.log('received bad case in player.move');
       }
       gm.board.grid[this.x][this.y].contents.players.push(this);
     }
     this.placeMine = function() {
       var mine = new Mine(this.id, this.x, this.y);
       // TODO: check for other mines / blocked paths / etc
-      this.mines.push(mine);
+      gm.mines.push(mine);
       gm.board.grid[this.x][this.y].contents.mines.push(mine);
     }
   }
@@ -122,7 +143,6 @@
       document.getElementById("canvas").height = window.innerHeight;
     }
     this.render = function() {
-      console.log('gm.globalBeat',gm.globalBeat);
       var ctx = document.getElementById("canvas").getContext("2d");
       var tileSizePx = (window.innerWidth * .6) / this.beats;
       var spacing = 10;
@@ -146,20 +166,32 @@
           }
           // render mines
           if(this.grid[i][j].contents.mines.length > 0) {
-            ctx.fillStyle="#FF0000";
-            ctx.fillRect(10, 10, 10, 10);
+            // only show mine when player is in square
+            if (SHOW_MINES || this.grid[i][j].contents.players.length > 0) {
+              ctx.fillStyle='#FF0000';
+              ctx.fillRect(10, 10, 10, 10);
+            }
           }
           ctx.restore();
         }
       }
+      // update debug menu
+      document.getElementById('mineCount').innerHTML = 'Mines: ' + gm.mines.length;
+      document.getElementById('levelCount').innerHTML = 'levelCount: ' + gm.levelCount;
+      document.getElementById('sweepCount').innerHTML = 'sweepCount: ' + gm.sweepCount;
     }
   }
 
   var GameManager = function() {
     this.board = new GameBoard(BEATS, PITCHES);
-    this.players = [];
-    this.globalBeat = 0; // initializing to 0 to avoid annoying errors. this might cause errors.
     this.soundManager = new SoundManager(this.board);
+
+    this.players = [];
+    this.mines = [];
+    this.globalBeat = 0; // initializing to 0 to avoid annoying errors. this might cause errors.
+    this.sweepCount = 0; // sweeps per level, TODO: may want to add universal count
+    this.levelCount = 0;
+
     this.start = function() {
       this.board.initialize();
       for (var i=0; i<PLAYER_COUNT; i++) {
@@ -168,10 +200,12 @@
         this.players[i] = new Player(i, x, y);
         this.board.grid[x][y].contents.players.push(this.players[i]);
       }
+      for(var i=0; i<MINE_COUNT; i++) {
+        this.placeRandomMine();
+      }
       this.board.render();
       this.soundManager.start();
       requestAnimationFrame(this.step.bind(this));
-
     }
     this.step = function(currentTime) {
       this.board.render();
@@ -193,8 +227,28 @@
         console.log('DOWN',DOWN);
       } else if (key === SPACE) {
         console.log('SPACE',SPACE);
-        this.players[0].placeMine();
+        // TODO: create separate function for making sounds
+        this.players[0].move(SPACE);
       }
+    }
+
+    this.placeRandomMine = function() {
+      if (this.mines.length >= MINE_LIMIT) return false;
+      var mine;
+      console.log('looking for mine placement...');
+      while (!mine) {
+        var x = randRange(1, this.board.beats); // cannot place mines on first square
+        var y = randRange(0, this.board.pitches);
+        console.log('x',x);
+        console.log('y',y);
+        console.log('this.board.grid[x]',this.board.grid[x]);
+        if (this.board.grid[x][y].contents.mines.length === 0) {
+          mine = new Mine(this.players[0].id, x, y);
+        }
+      }
+      this.mines.push(mine);
+      this.board.grid[x][y].contents.mines.push(mine);
+      return true;
     }
   }
 
@@ -202,34 +256,38 @@
     // set up notes via teoria.js
     var c4 = teoria.note('c4');
     var scale = c4.scale('mixolydian').simple();
+    this.chord = c4.chord('m').simple();
+    var chord = c4.chord('m').simple();
 
     this.getNote = function(pitchIndex) {
-      var octave = 3 + Math.floor(pitchIndex/scale.length);
-      var note = scale[pitchIndex % scale.length] + octave;
-      console.log('note', note);
+      // in scale
+      // var octave = 3 + Math.floor(pitchIndex/scale.length);
+      // var note = scale[pitchIndex % scale.length] + octave;
+      // in chord
+      var octave = 3 + Math.floor(pitchIndex/chord.length);
+      var note = chord[pitchIndex%chord.length] + octave;
+      console.log('note',note);
       return note;
     }
 
-    // create function to play sounds outside of tempo
     this.triggerSound = function(pitch) {
-      console.log('triggering pitch');
-      synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
+      this.getNote(board.pitches - 1 - pitch);
+      if (MUTED) return;
+      synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), '8n');
     }
-
-    this.triggerSound
 
     // create tone.js
     var vol = new Tone.Volume(12);
     var freeverb = new Tone.Freeverb(0.7, 1200).toMaster();
     var synth = new Tone.PolySynth(6, Tone.FMSynth, {
-        "oscillator": {
-            "partials": [0, 2, 3, 4, 8],
+        'oscillator': {
+            'partials': [0, 2, 3, 4, 8],
         },
-        "envelope": {
-            "attack": 0.1,
-            "decay": 0.4
+        'envelope': {
+            'attack': 0.025,
+            'decay': 0.4
         },
-        "volume": {
+        'volume': {
         }
     }).chain(vol).connect(freeverb).toMaster();
 
@@ -256,8 +314,6 @@
       // TODO: find better way to adjust globalBeat
       gm.globalBeat = this.currentBeat;
       var instruments = board.grid[this.currentBeat];
-      // play every beat
-
       if (!MUTED) {
         if(this.currentBeat == 0) {
           this.sounds.kick.play();
@@ -266,18 +322,18 @@
           this.sounds.hat.play();
         }
       }
-
       instruments.forEach(function(tile, pitch) {
         if(tile.contents.players.length > 0) {
           // TODO: find differnt players
-          this.triggerSound(pitch, "8n");
+          // this.triggerSound(pitch, '8n');
         } else if (tile.contents.mines.length > 0) {
-          this.triggerSound(pitch, "8n");
+          this.triggerSound(pitch, '8n');
         }
       }.bind(this))
       this.currentBeat++;
       if(this.currentBeat >= board.beats) {
         this.currentBeat = 0;
+        gm.sweepCount++;
       }
     }
     this.start = function() {
@@ -288,8 +344,16 @@
   var gm = new GameManager();
   gm.start();
 
-  document.addEventListener("keydown", function(event) {
+  document.addEventListener('keydown', function(event) {
     gm.handleInput(event.which);
+  });
+
+  document.addEventListener('mousedown', function() {
+    SHOW_MINES = true;
+  });
+
+  document.addEventListener('mouseup', function() {
+    SHOW_MINES = false;
   });
 
 </script>
