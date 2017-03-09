@@ -40,9 +40,10 @@
     DOWN_L = 83,
     SPACE = 32;
 
+  var MUTED = window.location.hash === '#muted' || false;
   var BEATS = 16;
   var PITCHES = 8;
-  var PLAYER_COUNT = 2;
+  var PLAYER_COUNT = 1;
   var STARTING_TEMPO = 240;
 
   var Mine = function(playerId, x, y) {
@@ -77,9 +78,17 @@
       switch (direction) {
         case UP:
           this.y = (this.y > 0 ? this.y - 1 : maxY-1);
+          // TODO: move this somewhere else eventually
+          if (this.x === 0) {
+            gm.soundManager.triggerSound(this.y);
+          }
           break;
         case DOWN:
           this.y = (this.y < maxY-1 ? this.y + 1 : 0);
+          // TODO: this too
+          if (this.x === 0) {
+            gm.soundManager.triggerSound(this.y);
+          }
           break;
         case LEFT:
           this.x = (this.x > 0 ? this.x - 1 : maxX-1);
@@ -102,8 +111,6 @@
     this.grid = [];
     this.beats = beats;
     this.pitches = pitches;
-    // this.mines = [];
-    // this.players = [];
     this.initialize = function() {
       for (var i=0; i<this.beats; i++) {
         this.grid[i] = [];
@@ -115,6 +122,7 @@
       document.getElementById("canvas").height = window.innerHeight;
     }
     this.render = function() {
+      console.log('gm.globalBeat',gm.globalBeat);
       var ctx = document.getElementById("canvas").getContext("2d");
       var tileSizePx = (window.innerWidth * .6) / this.beats;
       var spacing = 10;
@@ -122,6 +130,9 @@
         for (var j=0; j<this.grid[i].length; j++) {
           // render tiles
           ctx.fillStyle="#555";
+          if (i === gm.globalBeat) {
+            ctx.fillStyle="#777";
+          }
           var x = i*(tileSizePx + spacing);
           var y = j*(tileSizePx + spacing);
           ctx.save();
@@ -147,11 +158,12 @@
   var GameManager = function() {
     this.board = new GameBoard(BEATS, PITCHES);
     this.players = [];
+    this.globalBeat = 0; // initializing to 0 to avoid annoying errors. this might cause errors.
     this.soundManager = new SoundManager(this.board);
     this.start = function() {
       this.board.initialize();
       for (var i=0; i<PLAYER_COUNT; i++) {
-        var x = randRange(0, BEATS);
+        var x = 0; // start on the left side every time
         var y = randRange(0, PITCHES);
         this.players[i] = new Player(i, x, y);
         this.board.grid[x][y].contents.players.push(this.players[i]);
@@ -169,7 +181,7 @@
     this.handleInput = function(key) {
       if (key === LEFT) {
         console.log('LEFT',LEFT);
-        this.players[0].move(LEFT);
+        // this.players[0].move(LEFT);
       } else if (key === UP) {
         console.log('UP',UP);
         this.players[0].move(UP);
@@ -197,6 +209,14 @@
       console.log('note', note);
       return note;
     }
+
+    // create function to play sounds outside of tempo
+    this.triggerSound = function(pitch) {
+      console.log('triggering pitch');
+      synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
+    }
+
+    this.triggerSound
 
     // create tone.js
     var vol = new Tone.Volume(12);
@@ -233,22 +253,26 @@
       requestAnimationFrame(that.step);
     }
     this.playBeat = function() {
-      // this.currentBeat = this.currentBeat%board.beats;
+      // TODO: find better way to adjust globalBeat
+      gm.globalBeat = this.currentBeat;
       var instruments = board.grid[this.currentBeat];
       // play every beat
-      if(this.currentBeat == 0) {
-        this.sounds.kick.play();
-      }
-      if(this.currentBeat % 2 == 0) {
-        this.sounds.hat.play();
+
+      if (!MUTED) {
+        if(this.currentBeat == 0) {
+          this.sounds.kick.play();
+        }
+        if(this.currentBeat % 2 == 0) {
+          this.sounds.hat.play();
+        }
       }
 
       instruments.forEach(function(tile, pitch) {
         if(tile.contents.players.length > 0) {
           // TODO: find differnt players
-          synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
+          this.triggerSound(pitch, "8n");
         } else if (tile.contents.mines.length > 0) {
-          synth.triggerAttackRelease(this.getNote(board.pitches - 1 - pitch), "8n");
+          this.triggerSound(pitch, "8n");
         }
       }.bind(this))
       this.currentBeat++;
