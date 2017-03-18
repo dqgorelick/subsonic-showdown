@@ -1,3 +1,8 @@
+// note:
+// this is a no-frills webpack that just transpiles es6 and sass
+// it has loaders for fonts, and is ready for pixi.js
+// this is NOT a prod webpack
+
 var path = require('path');
 var webpack = require('webpack');
 var ExtractTextPlugin = require('extract-text-webpack-plugin');
@@ -29,7 +34,7 @@ module.exports = {
         loader: 'raw',
         exclude: /node_modules/
       },
-      {    test: /\.scss?$/,    loader: ExtractTextPlugin.extract('css-loader!sass-loader'),    }, {
+      { test: /\.scss?$/,    loader: ExtractTextPlugin.extract('css-loader!sass-loader'),    }, {
         test: /\.(eot|svg|ttf|woff|woff2|otf)$/,
         loader: 'file?name=public/fonts/[name].[ext]'
       }, {

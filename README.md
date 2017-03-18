@@ -7,7 +7,7 @@ Final Name TBD, alternative name: Sub-dominant
 
 run `npm install`
 
-##### Run webpack (transpiles es6 and sass)
+##### Run webpack (transpiles es6 and sass and watches files) 
 
 run `npm start` or `npm run start`
 

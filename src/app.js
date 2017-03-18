@@ -1,3 +1,6 @@
+import Tone from 'tone';
+import teoria from 'teoria';
+
 // helper functions
 function randRange(min, max) {
   return Math.floor(Math.random()*(max-min)) + min;
