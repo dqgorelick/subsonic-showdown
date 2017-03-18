@@ -1,26 +1,11 @@
 import Tone from 'tone';
 import teoria from 'teoria';
 
-// helper functions
-function randRange(min, max) {
-  return Math.floor(Math.random()*(max-min)) + min;
-}
+import {randRange, map} from './helper';
+import {Mine, NoteTile} from './elements';
 
-function map(n, start1, stop1, start2, stop2) {
-  return ((n-start1)/(stop1-start1))*(stop2-start2)+start2;
-};
+const LEFT = 37, UP = 38, RIGHT = 39, DOWN = 40, LEFT_L = 65, UP_L = 87, RIGHT_L = 68, DOWN_L = 83, SPACE = 32;
 
-const LEFT = 37,
-  UP = 38,
-  RIGHT = 39,
-  DOWN = 40,
-  LEFT_L = 65,
-  UP_L = 87,
-  RIGHT_L = 68,
-  DOWN_L = 83,
-  SPACE = 32;
-
-// sometimes there are too many drum noises...
 const MUTED = window.location.hash === '#muted' || false;
 const BEATS = 8;
 const MINE_COUNT = 2;
@@ -28,27 +13,9 @@ const MINE_LIMIT = 9;
 const PITCHES = 3;
 const PLAYER_COUNT = 1;
 const STARTING_TEMPO = 240;
+
+// debug
 var SHOW_MINES = false;
-
-class Mine {
-  constructor(playerId, x, y) {
-    this.x = x;
-    this.y = y;
-    this.id = playerId;
-    this.hidden = true;
-  }
-}
-
-class NoteTile {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.contents = {
-      players: [],
-      mines: []
-    }
-  }
-}
 
 class Player {
   constructor(id, x, y) {
@@ -263,10 +230,6 @@ class SoundManager {
   }
 
   getNote(pitchIndex) {
-    // in scale
-    // var octave = 3 + Math.floor(pitchIndex/scale.length);
-    // var note = scale[pitchIndex % scale.length] + octave;
-    // in chord
     const octave = 3 + Math.floor(pitchIndex/this.chord.length);
     const note = this.chord[pitchIndex%this.chord.length] + octave;
     return note;
@@ -280,7 +243,7 @@ class SoundManager {
   }
 
   step(currentTime) {
-    var delta = currentTime - this.lastPlayed;
+    const delta = currentTime - this.lastPlayed;
     if(delta > (60 / this.tempo)*1000) {
       this.playBeat();
       this.lastPlayed = currentTime;
