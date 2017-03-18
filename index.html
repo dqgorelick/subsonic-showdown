@@ -10,13 +10,13 @@
       width: 100%;
       height: 100%;
     }
-    .debug {
+    .instructions {
       position: fixed;
       bottom: 0;
       left: 0;
       padding: 20px;
     }
-    .debug > div {
+    .instructions > div {
       display: inline-block;
       padding-left: 5px;
     }
@@ -27,7 +27,7 @@
 <body>
   <div class="wrapper">
     <canvas id="canvas"></canvas>
-    <div class="debug">
+    <div class="instructions">
       <p>Go right to left. Mouse down to reveal mines. Space to play note @ current location.</p>
       <div id="mineCount"></div>
       <div id="sweepCount"></div>
@@ -60,7 +60,7 @@
   var BEATS = 8;
   var MINE_COUNT = 2;
   var MINE_LIMIT = 9;
-  var PITCHES = 4;
+  var PITCHES = 3;
   var PLAYER_COUNT = 1;
   var STARTING_TEMPO = 240;
   var SHOW_MINES = false;
@@ -109,6 +109,7 @@
           if (this.x == 0) {
             gm.sweepCount = 0;
             gm.levelCount++;
+            gm.showLastMines();
             gm.placeRandomMine();
           }
           break;
@@ -164,10 +165,10 @@
               p.render(ctx);
             });
           }
-          // render mines
+
           if(this.grid[i][j].contents.mines.length > 0) {
-            // only show mine when player is in square
-            if (SHOW_MINES || this.grid[i][j].contents.players.length > 0) {
+            // only show mine when player is in square, TODO: create better collision
+            if (SHOW_MINES || !this.grid[i][j].contents.mines[0].hidden || this.grid[i][j].contents.players.length > 0) {
               ctx.fillStyle='#FF0000';
               ctx.fillRect(10, 10, 10, 10);
             }
@@ -214,34 +215,36 @@
 
     this.handleInput = function(key) {
       if (key === LEFT) {
-        console.log('LEFT',LEFT);
         // this.players[0].move(LEFT);
       } else if (key === UP) {
-        console.log('UP',UP);
         this.players[0].move(UP);
       } else if (key === RIGHT) {
         this.players[0].move(RIGHT);
-        console.log('RIGHT',RIGHT);
       } else if (key === DOWN) {
         this.players[0].move(DOWN);
-        console.log('DOWN',DOWN);
       } else if (key === SPACE) {
-        console.log('SPACE',SPACE);
         // TODO: create separate function for making sounds
         this.players[0].move(SPACE);
       }
     }
 
+    this.showLastMines = function() {
+      var that = this;
+      this.mines.forEach(function(mine, it) {
+        console.log('mine',mine);
+        mine.hidden = false;
+        that.board.grid[mine.x][mine.y].hidden = false;
+      })
+      console.log('this.mines',this.mines);
+    }
+
     this.placeRandomMine = function() {
       if (this.mines.length >= MINE_LIMIT) return false;
       var mine;
-      console.log('looking for mine placement...');
       while (!mine) {
+        // TODO: make sure we don't get stuck in here, look to see if there are even enough empty squares
         var x = randRange(1, this.board.beats); // cannot place mines on first square
         var y = randRange(0, this.board.pitches);
-        console.log('x',x);
-        console.log('y',y);
-        console.log('this.board.grid[x]',this.board.grid[x]);
         if (this.board.grid[x][y].contents.mines.length === 0) {
           mine = new Mine(this.players[0].id, x, y);
         }
@@ -266,7 +269,6 @@
       // in chord
       var octave = 3 + Math.floor(pitchIndex/chord.length);
       var note = chord[pitchIndex%chord.length] + octave;
-      console.log('note',note);
       return note;
     }
 
